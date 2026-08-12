@@ -6,7 +6,7 @@ const app = express();
 app.get("/", (req, res) => res.send("Gible tracker rodando! 🐉"));
 app.listen(process.env.PORT || 3000, () => console.log("🌐 Servidor ativo"));
 
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1536879943848300646/QxA1UV9p2Sh1uS0Me8TjYeuEXEdnKQ88UcoShdZWfbVlJknv00bUS1Qu0k6Z0_AganR4";
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const COR_MUNDO_SILVER = "#C0C0C0";
 
 const socket = io("https://otponline.com", {
