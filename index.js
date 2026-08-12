@@ -37,17 +37,28 @@ const LIMITE_HISTORICO = 300;
 // ============================================================
 
 function extrairAtividade(html) {
-  // Extrai a cor do mundo
-  const cor = html.match(/style=["']color:\s*(#[0-9a-fA-F]{3,6})["']/i)?.[1]?.toUpperCase() || null;
+  // 1. Captura qualquer código HEX de cor dentro de style
+  const corMatch = html.match(/color:\s*(#[0-9a-fA-F]{3,6})/i);
+  let cor = corMatch ? corMatch[1].toUpperCase() : null;
+
+  // Trata caso a cor venha em formato curto (#C0C -> #C0C0C0)
+  if (cor && cor.length === 4) {
+    cor = `#${cor[1]}${cor[1]}${cor[2]}${cor[2]}${cor[3]}${cor[3]}`;
+  }
+
+  // Compara com o código do Silver (#C0C0C0)
   const ehSilver = cor === COR_MUNDO_SILVER;
 
-  // Extrai todas as tags <b>...</b> limpando qualquer resíduo de tag HTML
-  const matches = [...html.matchAll(/<b>(.*?)<\/b>/gi)].map(m => m[1].replace(/<[^>]*>/g, '').trim());
+  // 2. Extrai o conteúdo exato das tags <b> sem sujeira de tags aninhadas
+  const matches = [...html.matchAll(/<b>([\s\S]*?)<\/b>/gi)].map((m) =>
+    m[1].replace(/<[^>]*>/g, "").trim()
+  );
 
   const nomeJogador = matches[0] || null;
   const nomePokemon = matches[matches.length - 1] || null;
 
-  const filtroGible = nomePokemon?.toLowerCase() === "gible";
+  // 3. Verifica se contém "gible" no nome do pokémon (usa .includes para evitar falsos negativos por espaços extra)
+  const filtroGible = nomePokemon?.toLowerCase().includes("gible") || false;
 
   return {
     nomeJogador,
