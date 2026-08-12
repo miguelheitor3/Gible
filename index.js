@@ -12,8 +12,6 @@ app.listen(process.env.PORT || 3000, () => {
   console.log("🌐 Servidor ativo");
 });
 
-// Coloque o webhook do Discord como variável de ambiente.
-// NÃO coloque o webhook diretamente no código.
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 if (!DISCORD_WEBHOOK_URL) {
@@ -21,7 +19,8 @@ if (!DISCORD_WEBHOOK_URL) {
   process.exit(1);
 }
 
-const COR_MUNDO_SILVER = "#C0C0C0";
+// Códigos Hex conhecidos do Silver no OTP (Hex ou conversão de RGB)
+const CORES_SILVER = ["#C0C0C0", "#CCCCCC", "#SILVER"];
 
 const socket = io("https://otponline.com", {
   path: "/activies/socket.io",
@@ -31,34 +30,52 @@ const socket = io("https://otponline.com", {
 const vistos = new Set();
 const LIMITE_HISTORICO = 300;
 
+// Helper para converter rgb(r, g, b) para HEX
+function rgbToHex(rgbStr) {
+  const result = rgbStr.match(/\d+/g);
+  if (!result || result.length < 3) return null;
+  const r = parseInt(result[0]).toString(16).padStart(2, "0");
+  const g = parseInt(result[1]).toString(16).padStart(2, "0");
+  const b = parseInt(result[2]).toString(16).padStart(2, "0");
+  return `#${r}${g}${b}`.toUpperCase();
+}
 
 // ============================================================
 // EXTRAI AS INFORMAÇÕES DA ATIVIDADE
 // ============================================================
-
 function extrairAtividade(html) {
-  // 1. Captura qualquer código HEX de cor dentro de style
-  const corMatch = html.match(/color:\s*(#[0-9a-fA-F]{3,6})/i);
-  let cor = corMatch ? corMatch[1].toUpperCase() : null;
+  let cor = null;
 
-  // Trata caso a cor venha em formato curto (#C0C -> #C0C0C0)
-  if (cor && cor.length === 4) {
-    cor = `#${cor[1]}${cor[1]}${cor[2]}${cor[2]}${cor[3]}${cor[3]}`;
+  // 1. Tenta extrair HEX
+  const hexMatch = html.match(/color:\s*(#[0-9a-fA-F]{3,6})/i);
+  if (hexMatch) {
+    cor = hexMatch[1].toUpperCase();
+    if (cor.length === 4) {
+      cor = `#${cor[1]}${cor[1]}${cor[2]}${cor[2]}${cor[3]}${cor[3]}`;
+    }
+  } else {
+    // 2. Tenta extrair RGB caso não seja HEX
+    const rgbMatch = html.match(/color:\s*(rgb\([^)]+\))/i);
+    if (rgbMatch) {
+      cor = rgbToHex(rgbMatch[1]);
+    }
   }
 
-  // Compara com o código do Silver (#C0C0C0)
-  const ehSilver = cor === COR_MUNDO_SILVER;
+  // Verifica se a cor corresponde ao Silver
+  const ehSilver = CORES_SILVER.includes(cor);
 
-  // 2. Extrai o conteúdo exato das tags <b> sem sujeira de tags aninhadas
+  // Extrai o conteúdo das tags <b> limpando tags aninhadas
   const matches = [...html.matchAll(/<b>([\s\S]*?)<\/b>/gi)].map((m) =>
     m[1].replace(/<[^>]*>/g, "").trim()
   );
 
-  const nomeJogador = matches[0] || null;
-  const nomePokemon = matches[matches.length - 1] || null;
+  const nomeJogador = matches[0] || "Desconhecido";
+  const nomePokemon = matches[matches.length - 1] || "Desconhecido";
 
-  // 3. Verifica se contém "gible" no nome do pokémon (usa .includes para evitar falsos negativos por espaços extra)
-  const filtroGible = nomePokemon?.toLowerCase().includes("gible") || false;
+  // Busca "gible" em qualquer parte do nome do Pokémon ou no HTML
+  const filtroGible =
+    nomePokemon.toLowerCase().includes("gible") ||
+    /<b>\s*gible\s*<\/b>/i.test(html);
 
   return {
     nomeJogador,
@@ -70,153 +87,81 @@ function extrairAtividade(html) {
   };
 }
 
-
 // ============================================================
 // ENVIA MENSAGEM PARA O DISCORD
 // ============================================================
-
 async function enviarDiscord(info) {
-
   try {
-
     const response = await fetch(DISCORD_WEBHOOK_URL, {
       method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-      },
-
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-
         content:
           `🐉 **Gible detectado (Silver)!**\n` +
-          `👤 ${info.nomeJogador || "Desconhecido"}\n` +
-          `🌍 Silver (${info.cor})\n` +
+          `👤 ${info.nomeJogador}\n` +
+          `🌍 Silver (${info.cor || "Desconhecida"})\n` +
           `🎯 ${info.nomePokemon}`,
-
       }),
     });
 
     if (!response.ok) {
-
       const texto = await response.text();
-
-      console.error(
-        `❌ Discord respondeu ${response.status}: ${texto}`
-      );
-
+      console.error(`❌ Discord respondeu ${response.status}: ${texto}`);
       return;
     }
 
     console.log("✅ Mensagem enviada ao Discord!");
-
   } catch (err) {
-
-    console.error(
-      "❌ Erro ao enviar pro Discord:",
-      err.message
-    );
-
+    console.error("❌ Erro ao enviar pro Discord:", err.message);
   }
 }
 
-
 // ============================================================
-// SOCKET.IO
+// SOCKET.IO EVENTS
 // ============================================================
-
 socket.on("connect", () => {
-
-  console.log(
-    "✅ Conectado ao otponline.com"
-  );
-
+  console.log("✅ Conectado ao otponline.com");
 });
 
 socket.on("disconnect", (motivo) => {
-
-  console.log(
-    "🔌 Desconectado:",
-    motivo
-  );
-
+  console.log("🔌 Desconectado:", motivo);
 });
 
 socket.on("connect_error", (err) => {
-
-  console.log(
-    "❌ Erro de conexão:",
-    err.message
-  );
-
+  console.log("❌ Erro de conexão:", err.message);
 });
-
 
 // ============================================================
 // RECEBE AS ATIVIDADES
 // ============================================================
-
 socket.on("sendActivie", (data) => {
+  if (!data) return;
 
-  // Evita erro caso venha um pacote vazio
-  if (!data || !data[0]) {
-    return;
-  }
+  // Trata o payload vindo como Array ou String
+  const html = Array.isArray(data) ? data[0] : data;
+  if (!html || typeof html !== "string") return;
 
-  const html = data[0];
-
-
-  // ==========================================================
-  // EVITA PROCESSAR A MESMA ATIVIDADE DUAS VEZES
-  // ==========================================================
-
-  if (vistos.has(html)) {
-    return;
-  }
-
+  if (vistos.has(html)) return;
   vistos.add(html);
 
   if (vistos.size > LIMITE_HISTORICO) {
-
-    const primeiro =
-      vistos.values().next().value;
-
+    const primeiro = vistos.values().next().value;
     vistos.delete(primeiro);
-
   }
 
+  const info = extrairAtividade(html);
 
-  // ==========================================================
-  // EXTRAI OS DADOS
-  // ==========================================================
+  // 📡 LOG EM TEMPO REAL DE TODAS AS ATIVIDADES NO RAILWAY
+  console.log(
+    `[${new Date().toLocaleTimeString("pt-BR")}] 👤 ${info.nomeJogador} | 🎯 ${info.nomePokemon} | 🎨 Cor: ${info.cor || "N/A"}`
+  );
 
-  const info =
-    extrairAtividade(html);
-
-
-  // ==========================================================
   // FILTRO FINAL
-  //
-  // SOMENTE:
-  //
-  // Pokémon = Gible
-  // Mundo   = #C0C0C0 (Silver)
-  //
-  // ==========================================================
-
-  if (
-    info.filtroGible &&
-    info.ehSilver
-  ) {
-
-    console.log(
-      "🐉 GIBLE + SILVER DETECTADO!"
-    );
-
+  if (info.filtroGible && info.ehSilver) {
+    console.log("🐉 GIBLE + SILVER DETECTADO!");
     console.log(info);
-
     enviarDiscord(info);
-
+  } else if (info.filtroGible && !info.ehSilver) {
+    console.log(`⚠️ Gible detectado, mas em OUTRO MUNDO (Cor: ${info.cor})`);
   }
-
 });
