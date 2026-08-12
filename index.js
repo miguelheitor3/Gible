@@ -37,31 +37,17 @@ const LIMITE_HISTORICO = 300;
 // ============================================================
 
 function extrairAtividade(html) {
-
-  // Encontra todos os <b>...</b>
-  const matches = [...html.matchAll(/<b>([^<]+)<\/b>/gi)];
-
-  // Primeiro <b> = jogador
-  const nomeJogador =
-    matches[0]?.[1]?.trim() || null;
-
-  // Último <b> = Pokémon / atividade
-  const nomePokemon =
-    matches[matches.length - 1]?.[1]?.trim() || null;
-
-  // Só considera Gible se o último <b> for exatamente Gible
-  const filtroGible =
-    nomePokemon?.toLowerCase() === "gible";
-
   // Extrai a cor do mundo
-  const cor =
-    html.match(
-      /style=["']color:\s*(#[0-9a-fA-F]{3,6})["']/i
-    )?.[1]?.toUpperCase() || null;
+  const cor = html.match(/style=["']color:\s*(#[0-9a-fA-F]{3,6})["']/i)?.[1]?.toUpperCase() || null;
+  const ehSilver = cor === COR_MUNDO_SILVER;
 
-  // Verifica se é Silver
-  const ehSilver =
-    cor === COR_MUNDO_SILVER;
+  // Extrai todas as tags <b>...</b> limpando qualquer resíduo de tag HTML
+  const matches = [...html.matchAll(/<b>(.*?)<\/b>/gi)].map(m => m[1].replace(/<[^>]*>/g, '').trim());
+
+  const nomeJogador = matches[0] || null;
+  const nomePokemon = matches[matches.length - 1] || null;
+
+  const filtroGible = nomePokemon?.toLowerCase() === "gible";
 
   return {
     nomeJogador,
